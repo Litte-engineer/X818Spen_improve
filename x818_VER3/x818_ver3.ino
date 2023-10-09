@@ -1,3 +1,4 @@
+#include <EEPROM.h>
 // PB4 vacum STM32
 // PA5 led ok
 // PB5 led ng
@@ -20,7 +21,9 @@
 #define LED_OFF digitalWrite(LED, LOW)
 #define STATUS_SIGNAL_MAKING digitalRead(SIGNAL_MAKING)
 #define STATUS_MAKING_PITTONG digitalRead(MAKING_PITTONG)
-
+#define OFF 0
+#define ON 1
+#define ANDRESS 0
 
 
 uint8_t count;
@@ -33,10 +36,17 @@ uint8_t status_making;
 uint8_t status_pittong_making;
 uint32_t timer ;
 
+bool triger_reset;
+uint16_t count_reset;
+uint32_t timer_reset;
+uint8_t press_reset;
+uint8_t set_mode;
+
+
 
 void setup() {
   // put your setup code here, to run once:
-  Serial.begin(115200);
+  Serial.begin(9600);
   pinMode(VACUM_PIN, OUTPUT);
   pinMode(RESET_PIN, INPUT_PULLUP);
   pinMode(LED_NG, INPUT);
@@ -45,8 +55,16 @@ void setup() {
   pinMode(SIGNAL_MAKING, INPUT);
   pinMode(MAKING_PITTONG, INPUT);
 
+  EEPROM.begin(10);
+
   VACUM_OFF;
   LED_OFF;
+
+  triger_reset = EEPROM.read(ANDRESS);
+  delay(100);
+  digitalWrite(LED, triger_reset);
+
+  Serial.println(triger_reset);
 
 }
 
@@ -57,19 +75,55 @@ void loop() {
   status_led_ok    = STATUS_LED_OK;
   status_making    = STATUS_SIGNAL_MAKING;
   status_pittong_making = STATUS_MAKING_PITTONG;
-  Serial.println(status_led_ok);
+  //Serial.println(status_led_ok);
 
   if (status_led_ng == 1 && status_led_ok == 1) status_led = 0;
-  if (triger == 0)
+
+  if (set_mode == 0)
   {
-    // khi an nut reset hoac tin hieu making
-    if (status_reset == 0 && status_pittong_making == 0)
+    if (status_reset == 0)
     {
-      triger = 2;
-      VACUM_OFF;
+      if (millis() - timer_reset > 100)
+      {
+        count_reset ++;
+        timer_reset = millis();
+      }
+      if (count_reset >= 20)
+      {
+        triger_reset = !triger_reset;
+        EEPROM.write(ANDRESS, triger_reset);
+        EEPROM.commit();
+        Serial.println(triger_reset);
+        digitalWrite(LED, triger_reset);
+        set_mode = 1;
+      }
     }
-    if (status_making == 1) triger = 5;
   }
+  if (set_mode == 1)
+  {
+    if (status_reset == 1)
+    {
+      count_reset = 0;
+      set_mode = 0;
+    }
+  }
+
+
+  if (triger_reset == OFF)
+  {
+    if (triger == 0)
+    {
+      // khi an nut reset hoac tin hieu making
+      if (status_reset == 0 && status_pittong_making == 0)
+      {
+        triger = 2;
+        VACUM_OFF;
+      }
+      if (status_making == 1) triger = 5;
+    }
+  }
+
+
   if (triger == 5)
   {
     if (status_making == 0) triger = 6;
